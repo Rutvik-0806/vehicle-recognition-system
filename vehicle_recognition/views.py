@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 import os
 import json
+import re
 
 from .forms import UserRegistrationForm, VehicleImageUploadForm, ChallanForm, VehicleSearchForm
 from .models import Vehicle, Challan, ViolationType, Payment, UploadedImage
@@ -69,21 +70,29 @@ def upload_image(request):
                 image=form.cleaned_data['image']
             )
             
-            # Perform number plate recognition using ML
-            recognizer = NumberPlateRecognition()
-            image_path = uploaded_image.image.path
-            number_plate, confidence = recognizer.detect_number_plate(image_path)
-            
-            # Update uploaded image with results
+            manual_plate = (form.cleaned_data.get('manual_number_plate') or '').strip().upper()
+            manual_plate = re.sub(r'[^A-Z0-9]', '', manual_plate) if manual_plate else ''
+
+            number_plate = None
+            confidence = 0.0
+
+            if manual_plate:
+                number_plate = manual_plate
+                confidence = 1.0
+            else:
+                recognizer = NumberPlateRecognition()
+                image_path = uploaded_image.image.path
+                number_plate, confidence = recognizer.detect_number_plate(image_path)
+
             uploaded_image.number_plate_detected = number_plate or ''
             uploaded_image.confidence_score = confidence
             uploaded_image.processed = True
             uploaded_image.save()
-            
+
             if number_plate:
                 # Try to find vehicle in database
                 try:
-                    vehicle = Vehicle.objects.get(number_plate=number_plate)
+                    vehicle = Vehicle.objects.get(number_plate=number_plate.upper())
                     messages.success(request, f'Number plate detected: {number_plate} (Confidence: {confidence:.2f})')
                     return redirect('create_challan', vehicle_id=vehicle.id)
                 except Vehicle.DoesNotExist:

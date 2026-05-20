@@ -47,23 +47,115 @@ class NumberPlateRecognition:
     
     def _setup_tesseract(self):
         """Setup Tesseract OCR"""
+        self.tesseract_ok = False
         try:
-            # Try to find Tesseract automatically
             import shutil
             tesseract_path = shutil.which('tesseract')
             if tesseract_path:
                 pytesseract.pytesseract.tesseract_cmd = tesseract_path
                 print(f"Tesseract found at: {tesseract_path}")
             else:
-                # Common Windows path
                 windows_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
                 if os.path.exists(windows_path):
                     pytesseract.pytesseract.tesseract_cmd = windows_path
                     print(f"Tesseract found at: {windows_path}")
                 else:
                     print("Warning: Tesseract not found in standard locations")
+            pytesseract.get_tesseract_version()
+            self.tesseract_ok = True
         except Exception as e:
             print(f"Error setting up Tesseract: {e}")
+
+    def _load_image(self, image_path):
+        """Load image with OpenCV, falling back to PIL for formats OpenCV misses."""
+        if not isinstance(image_path, str):
+            return image_path
+
+        image = cv2.imread(str(image_path))
+        if image is not None:
+            return image
+
+        try:
+            pil_image = Image.open(image_path)
+            if pil_image.mode != 'RGB':
+                pil_image = pil_image.convert('RGB')
+            return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            print(f"ERROR: Could not load image from {image_path}: {e}")
+            return None
+
+    def _upscale_for_ocr(self, image, min_height=360):
+        """Upscale small images so Tesseract can read plate text."""
+        h, w = image.shape[:2]
+        if h >= min_height:
+            return image
+        scale = min_height / float(h)
+        return cv2.resize(
+            image,
+            (int(w * scale), int(h * scale)),
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    def _prepare_for_tesseract(self, image):
+        """Tesseract expects RGB; OpenCV uses BGR."""
+        if len(image.shape) == 3:
+            return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return image
+
+    def normalize_plate(self, text):
+        """Clean OCR output and fix common character confusions in digit runs."""
+        if not text:
+            return ''
+        cleaned = re.sub(r'[^A-Z0-9]', '', text.upper())
+        if len(cleaned) < 4:
+            return cleaned
+        prefix = cleaned[:4]
+        suffix = cleaned[4:]
+        digit_map = str.maketrans({
+            'O': '0', 'I': '1', 'L': '1', 'S': '5', 'B': '8', 'Z': '2',
+        })
+        suffix = suffix.translate(digit_map)
+        return prefix + suffix
+
+    def extract_plate_candidates(self, text):
+        """Pull likely plate strings from noisy OCR output."""
+        cleaned = re.sub(r'[^A-Z0-9]', '', (text or '').upper())
+        candidates = []
+        if not cleaned:
+            return candidates
+
+        patterns = [
+            r'[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{3,4}',
+            r'[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}',
+            r'[A-Z]{3}[0-9]{3,4}',
+            r'[A-Z]{1,3}[0-9]{2,4}[A-Z]{0,3}[0-9]{0,4}',
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, cleaned):
+                candidates.append(self.normalize_plate(match.group()))
+
+        if 5 <= len(cleaned) <= 12:
+            candidates.append(self.normalize_plate(cleaned))
+
+        seen = set()
+        unique = []
+        for candidate in candidates:
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                unique.append(candidate)
+        return unique
+
+    def _best_plate_from_ocr_text(self, text, confidence):
+        """Pick the best plate candidate from raw OCR text."""
+        for candidate in self.extract_plate_candidates(text):
+            if self.validate_number_plate(candidate):
+                return candidate, max(confidence / 100.0, 0.55)
+
+        normalized = self.normalize_plate(text)
+        if normalized and self.validate_number_plate_relaxed(normalized):
+            return normalized, max(confidence / 100.0, 0.45)
+
+        return '', 0.0
     
     def preprocess_image(self, image):
         """Enhanced image preprocessing for better OCR"""
@@ -102,65 +194,74 @@ class NumberPlateRecognition:
         return processed_images
     
     def extract_text_with_multiple_configs(self, image):
-        """Try multiple Tesseract configurations"""
+        """Try multiple Tesseract configurations and return the best plate match."""
+        if not getattr(self, 'tesseract_ok', False):
+            return '', 0
+
+        ocr_image = self._prepare_for_tesseract(image)
         configs = [
-            '--oem 3 --psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
             '--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            '--oem 3 --psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
             '--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            '--oem 3 --psm 13 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            '--oem 1 --psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            '--oem 3 --psm 11 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            '--oem 3 --psm 3',
+            '--oem 1 --psm 7',
         ]
-        
-        best_text = ""
+
+        best_text = ''
         best_confidence = 0
-        
+
         for config in configs:
             try:
-                # Get text and confidence
-                text = pytesseract.image_to_string(image, config=config).strip()
-                
-                # Try to get confidence data
+                text = pytesseract.image_to_string(ocr_image, config=config).strip()
                 try:
-                    data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
+                    data = pytesseract.image_to_data(
+                        ocr_image, config=config, output_type=pytesseract.Output.DICT
+                    )
                     confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
-                    avg_confidence = np.mean(confidences) if confidences else 0
-                except:
-                    avg_confidence = 50  # Default confidence
-                
-                cleaned_text = re.sub(r'[^A-Z0-9]', '', text.upper())
-                
-                if len(cleaned_text) >= 4 and avg_confidence > best_confidence:
-                    best_text = cleaned_text
-                    best_confidence = avg_confidence
-                    
+                    avg_confidence = float(np.mean(confidences)) if confidences else 40.0
+                except Exception:
+                    avg_confidence = 40.0
+
+                plate, plate_conf = self._best_plate_from_ocr_text(text, avg_confidence)
+                if plate and plate_conf > best_confidence:
+                    best_text = plate
+                    best_confidence = plate_conf
+
             except Exception as e:
                 print(f"OCR config failed: {e}")
                 continue
-        
-        return best_text, best_confidence
+
+        return best_text, best_confidence * 100
     
     def validate_number_plate(self, text):
-        """Validate if the extracted text looks like a number plate"""
-        if not text or len(text) < 4:
+        """Validate if the extracted text looks like a number plate."""
+        if not text or len(text) < 5:
             return False
-        
-        # Common number plate patterns (adjust for your region)
+
         patterns = [
-            r'^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$',  # Indian format: XX00XX0000
-            r'^[A-Z]{3}[0-9]{3,4}$',                 # Simple format: XXX000
-            r'^[A-Z]{1,3}[0-9]{1,4}[A-Z]{0,3}$',    # Mixed format
-            r'^[0-9]{1,3}[A-Z]{1,3}[0-9]{1,4}$',    # Number-Letter-Number
+            r'^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{3,4}$',
+            r'^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$',
+            r'^[A-Z]{3}[0-9]{3,4}$',
+            r'^[A-Z]{1,3}[0-9]{1,4}[A-Z]{0,3}[0-9]{0,4}$',
+            r'^[0-9]{1,3}[A-Z]{1,3}[0-9]{1,4}$',
         ]
-        
+
         for pattern in patterns:
             if re.match(pattern, text):
                 return True
-        
-        # Basic validation: must contain both letters and numbers
+
         has_letter = bool(re.search(r'[A-Z]', text))
         has_number = bool(re.search(r'[0-9]', text))
-        
-        return has_letter and has_number and 4 <= len(text) <= 12
+        return has_letter and has_number and 5 <= len(text) <= 11
+
+    def validate_number_plate_relaxed(self, text):
+        """Looser validation used when OCR is slightly off."""
+        if not text:
+            return False
+        has_letter = bool(re.search(r'[A-Z]', text))
+        has_number = bool(re.search(r'[0-9]', text))
+        return has_letter and has_number and 5 <= len(text) <= 11
     
     def detect_with_contours(self, image):
         """Fallback method using contour detection for number plates"""
@@ -191,7 +292,7 @@ class NumberPlateRecognition:
                     
                     # Filter by aspect ratio (typical number plate ratios)
                     aspect_ratio = w / h
-                    if 2.0 <= aspect_ratio <= 5.0 and w > 100 and h > 30:
+                    if 1.8 <= aspect_ratio <= 6.0 and w > 50 and h > 15:
                         # Extract the region
                         plate_img = gray[y:y+h, x:x+w]
                         
@@ -213,15 +314,15 @@ class NumberPlateRecognition:
     def detect_number_plate(self, image_path):
         """Main detection method with multiple fallback approaches"""
         try:
-            # Load image
-            if isinstance(image_path, str):
-                image = cv2.imread(image_path)
-                if image is None:
-                    print(f"ERROR: Could not load image from {image_path}")
-                    return None, 0.0
-            else:
-                image = image_path  # Assume it's already a numpy array
-            
+            if not getattr(self, 'tesseract_ok', False):
+                print("Tesseract OCR is not available on this server.")
+                return None, 0.0
+
+            image = self._load_image(image_path)
+            if image is None:
+                return None, 0.0
+
+            image = self._upscale_for_ocr(image)
             print(f"Image loaded successfully. Shape: {image.shape}")
             
             best_plate = ""
@@ -278,14 +379,32 @@ class NumberPlateRecognition:
             if not best_plate or best_confidence < 0.3:
                 print("Trying full image OCR...")
                 processed_images = self.preprocess_image(image)
-                
+
                 for name, proc_img in processed_images:
                     text, conf = self.extract_text_with_multiple_configs(proc_img)
-                    if text and self.validate_number_plate(text) and conf/100 > best_confidence:
+                    if text and conf / 100 > best_confidence:
                         best_plate = text
                         best_confidence = conf / 100
                         print(f"Full image OCR with {name}: {text}")
-            
+
+            # Method 4: center crop (plate often in lower half of vehicle photos)
+            if not best_plate or best_confidence < 0.3:
+                print("Trying center/bottom crop OCR...")
+                h, w = image.shape[:2]
+                crops = [
+                    image[int(h * 0.35):, :],
+                    image[int(h * 0.5):, int(w * 0.1): int(w * 0.9)],
+                ]
+                for crop in crops:
+                    if crop.size == 0:
+                        continue
+                    crop = self._upscale_for_ocr(crop)
+                    text, conf = self.extract_text_with_multiple_configs(crop)
+                    if text and conf / 100 > best_confidence:
+                        best_plate = text
+                        best_confidence = conf / 100
+                        print(f"Crop OCR found: {text}")
+
             if best_plate:
                 print(f"Final result: {best_plate} (confidence: {best_confidence:.3f})")
                 return best_plate, best_confidence

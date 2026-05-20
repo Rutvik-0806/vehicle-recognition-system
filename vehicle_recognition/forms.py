@@ -29,6 +29,14 @@ class VehicleImageUploadForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Additional description of the violation'})
     )
+    manual_number_plate = forms.CharField(
+        max_length=20,
+        required=False,
+        label='Number plate (optional)',
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Enter plate manually if auto-detect fails (e.g. MH12AB1234)',
+        }),
+    )
 
 
 class ChallanForm(forms.ModelForm):
