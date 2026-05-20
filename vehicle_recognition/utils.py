@@ -1,4 +1,3 @@
-import torch
 import cv2
 import numpy as np
 import pytesseract
@@ -21,6 +20,13 @@ class NumberPlateRecognition:
         
     def _setup_yolo_model(self):
         """Setup YOLO model with proper error handling"""
+        try:
+            import torch
+        except ImportError:
+            print("PyTorch not installed; YOLO detection disabled (OCR still available).")
+            self.model = None
+            return
+
         try:
             model_path = 'best.pt'
             if os.path.exists(model_path):

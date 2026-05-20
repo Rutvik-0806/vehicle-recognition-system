@@ -1,5 +1,23 @@
 # Publishing and hosting
 
+## Live site on Render (recommended)
+
+**One-click deploy** (connects your GitHub repo and creates the web service + database):
+
+**[Deploy to Render](https://render.com/deploy?repo=https://github.com/Rutvik-0806/vehicle-recognition-system)**
+
+1. Sign in to [Render](https://render.com/) with GitHub.
+2. Click the link above (or **New** → **Blueprint** → paste repo URL).
+3. Approve the blueprint (`render.yaml` creates a **Web Service** and **PostgreSQL**).
+4. Wait for the first deploy (about 5–15 minutes).
+5. Open your live URL: `https://vehicle-recognition-system.onrender.com` (or the name Render shows on the dashboard).
+
+**Login after deploy:** `admin` / `admin123` (change the password in Render → **Environment** if you keep the app public).
+
+**Note:** The Render image omits PyTorch/YOLO to stay within free-tier limits. Upload and OCR still work via **Tesseract** and OpenCV.
+
+---
+
 ## Push this project to GitHub
 
 1. **Install Git** (if needed): https://git-scm.com/download/win  

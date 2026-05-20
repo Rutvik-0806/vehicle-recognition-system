@@ -5,6 +5,7 @@ Django settings for vehicle_system project.
 from pathlib import Path
 import os
 from decouple import config
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -15,7 +16,11 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='*',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()],
+)
 
 # Application definition
 INSTALLED_APPS = [
@@ -32,6 +37,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -132,4 +138,27 @@ FAST2SMS_API_KEY = config('FAST2SMS_API_KEY', default='your-fast2sms-api-key')
 # Base URL for notifications (for mobile access)
 # Change this to your computer's IP address for mobile access
 # Example: BASE_URL = 'http://192.168.1.100:8000'  # Your computer's IP
-BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000') 
+BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000')
+
+# --- Render / production ---
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS = list(
+        set(ALLOWED_HOSTS + [RENDER_EXTERNAL_HOSTNAME, '.onrender.com'])
+    )
+    CSRF_TRUSTED_ORIGINS = [
+        f'https://{RENDER_EXTERNAL_HOSTNAME}',
+        'https://*.onrender.com',
+    ]
+    BASE_URL = config('BASE_URL', default=f'https://{RENDER_EXTERNAL_HOSTNAME}')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if os.environ.get('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.config(
+        default=os.environ['DATABASE_URL'],
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+
+if os.environ.get('RENDER') or RENDER_EXTERNAL_HOSTNAME:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage' 
