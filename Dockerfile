@@ -2,6 +2,7 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV TESSERACT_CMD=/usr/bin/tesseract
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \

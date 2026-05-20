@@ -99,7 +99,11 @@ def upload_image(request):
                     messages.warning(request, f'Vehicle with number plate {number_plate} not found in database. Please add the vehicle first.')
                     return redirect('add_vehicle')
             else:
-                messages.error(request, 'Could not detect number plate. Please try with a clearer image.')
+                messages.error(
+                    request,
+                    'Could not detect number plate automatically. '
+                    'Install Tesseract OCR on this machine, or enter the plate manually in the optional field and upload again.'
+                )
                 return redirect('upload_image')
     else:
         form = VehicleImageUploadForm()

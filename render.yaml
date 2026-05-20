@@ -31,3 +31,5 @@ services:
         value: admin@example.com
       - key: DJANGO_SUPERUSER_PASSWORD
         value: admin123
+      - key: TESSERACT_CMD
+        value: /usr/bin/tesseract

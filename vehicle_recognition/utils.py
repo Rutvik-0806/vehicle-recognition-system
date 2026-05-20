@@ -13,9 +13,8 @@ class NumberPlateRecognition:
     """Improved number plate recognition with better preprocessing and fallback methods"""
     
     def __init__(self):
-        # Initialize YOLO model
-        self._setup_yolo_model()
-        # Setup Tesseract
+        self.model = None
+        self._yolo_loaded = False
         self._setup_tesseract()
         
     def _setup_yolo_model(self):
@@ -48,23 +47,52 @@ class NumberPlateRecognition:
     def _setup_tesseract(self):
         """Setup Tesseract OCR"""
         self.tesseract_ok = False
+        self.tesseract_cmd = None
+
+        candidate_paths = [
+            os.environ.get('TESSERACT_CMD'),
+            os.environ.get('TESSERACT_PATH'),
+        ]
+
         try:
             import shutil
-            tesseract_path = shutil.which('tesseract')
-            if tesseract_path:
-                pytesseract.pytesseract.tesseract_cmd = tesseract_path
-                print(f"Tesseract found at: {tesseract_path}")
-            else:
-                windows_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-                if os.path.exists(windows_path):
-                    pytesseract.pytesseract.tesseract_cmd = windows_path
-                    print(f"Tesseract found at: {windows_path}")
-                else:
-                    print("Warning: Tesseract not found in standard locations")
-            pytesseract.get_tesseract_version()
-            self.tesseract_ok = True
-        except Exception as e:
-            print(f"Error setting up Tesseract: {e}")
+            which_path = shutil.which('tesseract')
+            if which_path:
+                candidate_paths.append(which_path)
+        except Exception:
+            pass
+
+        candidate_paths.extend([
+            r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+            r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+            '/usr/bin/tesseract',
+            '/usr/local/bin/tesseract',
+        ])
+
+        for path in candidate_paths:
+            if not path or not os.path.isfile(path):
+                continue
+            try:
+                pytesseract.pytesseract.tesseract_cmd = path
+                pytesseract.get_tesseract_version()
+                self.tesseract_cmd = path
+                self.tesseract_ok = True
+                print(f"Tesseract ready at: {path}")
+                return
+            except Exception as e:
+                print(f"Tesseract check failed for {path}: {e}")
+
+        print(
+            "Warning: Tesseract OCR not found. "
+            "Install from https://github.com/UB-Mannheim/tesseract/wiki "
+            "or set TESSERACT_CMD in .env. Manual plate entry still works."
+        )
+
+    def _ensure_yolo(self):
+        """Load YOLO only when needed (slow on first use)."""
+        if not self._yolo_loaded:
+            self._setup_yolo_model()
+            self._yolo_loaded = True
 
     def _load_image(self, image_path):
         """Load image with OpenCV, falling back to PIL for formats OpenCV misses."""
@@ -329,6 +357,7 @@ class NumberPlateRecognition:
             best_confidence = 0.0
             
             # Method 1: YOLO Detection (if model is available)
+            self._ensure_yolo()
             if self.model is not None:
                 try:
                     print("Running YOLO detection...")

@@ -9,4 +9,8 @@ crispy-bootstrap5==2025.6
 twilio==8.10.0
 pytesseract==0.3.10
 torch>=1.8.0
-yolov5>=7.0.12 
+yolov5>=7.0.12
+whitenoise==6.7.0
+dj-database-url==2.2.0
+gunicorn==22.0.0
+psycopg2-binary==2.9.9 

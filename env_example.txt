@@ -34,4 +34,7 @@ MSG91_FLOW_ID=your-flow-id
 SMS_SENDER_ID=TRAFFIC
 
 # Base URL for payment links
-BASE_URL=http://127.0.0.1:8000 
+BASE_URL=http://127.0.0.1:8000
+
+# Tesseract OCR (Windows example after install)
+# TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe 
