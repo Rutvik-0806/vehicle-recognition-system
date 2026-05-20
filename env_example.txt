@@ -1,0 +1,37 @@
+# Django Settings
+SECRET_KEY=your-secret-key-here
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Database
+DATABASE_URL=sqlite:///db.sqlite3
+
+# Email Configuration (Gmail)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+
+# SMS Configuration - Multiple Services Supported
+
+# Fast2SMS (Primary for India)
+FAST2SMS_API_KEY=your-fast2sms-api-key
+
+# TextLocal (Alternative for India)
+TEXTLOCAL_API_KEY=your-textlocal-api-key
+
+# Twilio (International)
+TWILIO_ACCOUNT_SID=your-twilio-account-sid
+TWILIO_AUTH_TOKEN=your-twilio-auth-token
+TWILIO_FROM_NUMBER=+1234567890
+
+# MSG91 (Another Indian SMS service)
+MSG91_API_KEY=your-msg91-api-key
+MSG91_FLOW_ID=your-flow-id
+
+# SMS Sender ID (for services that support it)
+SMS_SENDER_ID=TRAFFIC
+
+# Base URL for payment links
+BASE_URL=http://127.0.0.1:8000 

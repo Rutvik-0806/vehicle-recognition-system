@@ -1,0 +1,12 @@
+Django==4.2.7
+Pillow==11.3.0
+opencv-python==4.8.1.78
+numpy==1.26.4
+requests==2.32.4
+python-decouple==3.8
+django-crispy-forms==2.4
+crispy-bootstrap5==2025.6
+twilio==8.10.0
+pytesseract==0.3.10
+torch>=1.8.0
+yolov5>=7.0.12 

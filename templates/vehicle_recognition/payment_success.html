@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Payment Success - Vehicle Recognition System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-check-circle"></i> Payment Successful
+                    </h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle fa-5x text-success mb-3"></i>
+                        <h3>Payment Completed Successfully!</h3>
+                        <p class="text-muted">Your challan payment has been processed.</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Challan Details</h5>
+                            <p><strong>Challan ID:</strong> {{ challan.challan_id }}</p>
+                            <p><strong>Vehicle:</strong> {{ challan.vehicle.number_plate }}</p>
+                            <p><strong>Owner:</strong> {{ challan.vehicle.owner_name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Payment Details</h6>
+                            <p class="h4 text-success">₹{{ challan.penalty_amount }}</p>
+                            {% if challan.payment_set.first %}
+                                <p><strong>Method:</strong> {{ challan.payment_set.first.payment_method }}</p>
+                                <p><strong>Date:</strong> {{ challan.payment_set.first.payment_date|date:"M d, Y H:i" }}</p>
+                                {% if challan.payment_set.first.transaction_id %}
+                                    <p><strong>Transaction ID:</strong> {{ challan.payment_set.first.transaction_id }}</p>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-4">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Thank you for your payment!</strong> Your challan has been marked as paid. 
+                        Please keep this receipt for your records.
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="{% url 'home' %}" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Back to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

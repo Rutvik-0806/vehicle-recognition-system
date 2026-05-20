@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Upload Image - Vehicle Recognition System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-upload text-primary"></i> Upload Vehicle Image
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-camera"></i> Upload Vehicle Image for Number Plate Recognition
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary" id="uploadBtn">
+                            <i class="fas fa-upload"></i> Upload and Process
+                        </button>
+                        <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Instructions
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Ensure the number plate is clearly visible
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Good lighting conditions improve accuracy
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Avoid blurry or distorted images
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Supported formats: JPG, PNG, JPEG
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Maximum file size: 10MB
+                    </li>
+                </ul>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb"></i>
+                    <strong>Tip:</strong> Position the camera at a slight angle to the number plate for better results.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Modal -->
+<div class="modal fade" id="processingModal" tabindex="-1" aria-labelledby="processingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="processingModalLabel">
+                    <i class="fas fa-cog fa-spin"></i> Processing Image
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Analyzing the image for number plate detection...</p>
+                <p class="text-muted small">This may take a few seconds</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput.files.length > 0) {
+        const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+        modal.show();
+    }
+});
+
+// Drag and drop functionality
+const dropZone = document.querySelector('.card-body');
+const fileInput = document.querySelector('input[type="file"]');
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight(e) {
+    dropZone.classList.add('border-primary');
+}
+
+function unhighlight(e) {
+    dropZone.classList.remove('border-primary');
+}
+
+dropZone.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    fileInput.files = files;
+}
+</script>
+{% endblock %} 
